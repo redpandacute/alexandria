@@ -1,6 +1,5 @@
 import curses
 
-
 class InputWindow():
     
 
@@ -10,7 +9,8 @@ class InputWindow():
     def __init__(self, maxY, maxX):
         self.maxY = maxY
         self.maxX = maxX
-        self.window = curses.newwin(1, maxX, maxY - 1, 0)
+        self.window = curses.newwin(1, self.maxX - 2, self.maxY - 1, 1)
+        self.refresh()
         #self.window.addstr(self.PROMPT + self.inputstr)
         #self.window.border('|', '|', '-','-', '>', '<', '>','<')
     
@@ -21,9 +21,12 @@ class InputWindow():
 
         self.maxY = new_maxY
         self.maxX = new_maxX
-        self.window.mvwin(self.maxY - 1, 0)
-        self.window.resize(1, self.maxX)    
-        self.window.border('|', '|', '-','-', '>', '<', '>','<')
+
+        self.window.resize(1, self.maxX - 2)    
+        self.window.mvwin(self.maxY - 1, 1)
+
+        #testing purposes
+        #self.window.border('|', '|', '-','-', '>', '<', '>','<')
         self.window.erase()
         self.window.addstr(self.PROMPT + self.inputstr)
         self.window.refresh()
@@ -48,6 +51,36 @@ class InputWindow():
         inputstr = ''
         self.refresh()
 
+class SelectorWindow():
+
+    def __init__(self, nlines, ncols, posY,  posX):
+        self.ncols = ncols
+        self.nlines = nlines
+        self.posY = posY
+        self.posX = posX
+        self.window = curses.newwin(self.nlines, self.ncols, self.posY, self.posX)
+        #self.window = screen.subwin(nlines, self.ncols, self.posY, self.posX)
+
+    def redraw(self, new_nlines, new_ncols, new_posY, new_posX):
+        global window
+        global ncols
+        global nlines
+        global posY
+        global posX
+
+        self.nlines = new_nlines
+        self.ncols = new_ncols
+        self.posY = new_posY
+        self.posX = new_posX
+        self.window.clear()
+        self.window.refresh()
+        self.window.resize(self.nlines, self.ncols) 
+        self.window.mvwin(new_posY, new_posX)
+        self.window.border('|', '|', '-','-', '>', '<', '>','<')
+        self.window.refresh()
+
+    def refresh(self):
+        self.redraw(self.nlines, self.ncols, self.posY, self.posX)
 
 class gui():
     
@@ -59,7 +92,9 @@ class gui():
         self.screen.keypad(1)
 
         self.inptwin = InputWindow(curses.LINES, curses.COLS)
+        self.dirwin = SelectorWindow(curses.LINES - 3, curses.COLS - 2, 1, 1)
         self.inptwin.refresh()
+        self.dirwin.refresh()
 
     def startGui(self):
         self.initCurses()
@@ -77,6 +112,11 @@ class gui():
                 #dont change the arrangement of these 3 functions
                 self.screen.refresh()
                 maxY, maxX = self.screen.getmaxyx()
+
+                self.dirwin.redraw(maxY-3, maxX-2, 1, 1)
                 self.inptwin.redraw(maxY, maxX)
+            else :
+                self.inptwin.addinput(str(x))
+                self.inptwin.refresh()
 g = gui()
 g.startGui()
