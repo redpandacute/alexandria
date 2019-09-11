@@ -6,8 +6,7 @@ import curses
 
 class Item:
 
-    hovered = False
-    selected = False
+    dir_suffix = 'dir'
 
     NORMAL = "\033[01;00;00m"
     SELECTED = "\033[01;31;00m"
@@ -15,8 +14,17 @@ class Item:
     strformat = NORMAL
 
     def __init__(self, name):
-        self.name = name
+        
+        splitname = name.rsplit('.', 1) #splitting the string into pre and suffix
+        self.name = splitname[0]
+        try:
+            self.suffix = splitname[1].upper()
+        except:
+            self.suffix = self.dir_suffix.upper()
 
+        self.hovered = False
+        self.selected = False
+    
     def getSelectorItem(self) :
         return self.name
 
@@ -44,10 +52,15 @@ class Item:
 
 class Selector:
 
-    currentIndex = 0
 
-    def __init__(self, items):
-        self.items = items
+    def __init__(self, item_strings):
+        
+        self.items = []
+        self.currentIndex = 0
+
+        for item_string in item_strings:
+            self.items.append(Item(item_string))
+
         self.listener = keyboard.Listener(
                 on_press=self.on_press,
                 on_release=self.on_release)
