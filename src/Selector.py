@@ -14,13 +14,16 @@ class Item:
     strformat = NORMAL
 
     def __init__(self, name):
-        
+       
+        self.fullname = name
         splitname = name.rsplit('.', 1) #splitting the string into pre and suffix
         self.name = splitname[0]
         try:
-            self.suffix = splitname[1].upper()
+            self.suffix = splitname[1]
+            self.isDir = False #cannot enter directory.d directories!
         except:
-            self.suffix = self.dir_suffix.upper()
+            self.suffix = self.dir_suffix
+            self.isDir = True
 
         self.hovered = False
         self.selected = False

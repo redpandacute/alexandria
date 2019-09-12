@@ -1,11 +1,12 @@
 import curses
+import os
 from Selector import Selector
-from Selector import Item
+from Selector import Item #Selectorfile should be renamed
 
 class InputWindow():
     
 
-    PROMPT = ':-:'
+    PROMPT = '~ '
     inputstr = ''
 
     def __init__(self, maxY, maxX):
@@ -24,6 +25,7 @@ class InputWindow():
         self.maxY = new_maxY
         self.maxX = new_maxX
 
+
         self.window.resize(1, self.maxX - 2)    
         self.window.mvwin(self.maxY - 2, 1)
 
@@ -36,36 +38,62 @@ class InputWindow():
     def refresh(self):
         self.redraw(self.maxY, self.maxX)
 
-    def addinput(self, key):
+    def addinput(self, inpt):
         global inputstr
-
-        self.inputstr += key
+        self.inputstr += inpt
 
     def backspace(self):
         global inputstr
 
-        self.inputstr[:-1]
-        self.refresh()
+        self.inputstr = self.inputstr[:-1]
 
-    def flush():
+    def flush(self):
         global inputstr
 
-        inputstr = ''
+        self.inputstr = ''
+
+#======================== reaction ============================
+
+    def react(self, key):
+    
+        #ENTER == 10, BACKSPACE == 127, ESC == 27, up == 279165, down == 279166, right == 279167, left == 279168
+
+        if key == 10: #ENTER
+            #execute command in parser
+            self.flush()
+        elif key == 127: #BACKSPACE
+            self.backspace()
+        elif key > 256:
+            pass
+        else:
+            #for getting key constants
+            #self.addinput(str(key))
+            try:
+                self.addinput(chr(key))
+            except:
+                pass
+
         self.refresh()
 
 class SelectorWindow():
 
     EMPTY_STRING = "[empty]"
 
-    def __init__(self, selectorItems, nlines = None, ncols = None, posY = None,  posX = None):
+    def __init__(self, dirPath, nlines = None, ncols = None, posY = None,  posX = None):
         
+        self.dirPath = dirPath
         self.focused = False
-        self.selector = Selector(selectorItems)
         
+        self.readPath(self.dirPath)
+
         self.ncols = ncols
         self.nlines = nlines
         self.posY = posY
         self.posX = posX
+        self.currentIndex = 0
+
+        
+
         if self.ncols is not None: #it is assumed that there isnt a method that constructs from null values
             self.minScrollPos = 0
             self.maxScrollPos = self.nlines - 2
@@ -73,8 +101,13 @@ class SelectorWindow():
         else :
             self.window = None
         #self.window = screen.subwin(nlines, self.ncols, self.posY, self.posX)
-
-
+        
+        if self.items:
+            self.items[self.currentIndex].setHovered(True)
+            self.empty = False
+        else:
+            self.empty = True
+        
     def redraw(self, new_nlines, new_ncols, new_posY, new_posX):
         global window
         global ncols
@@ -97,58 +130,50 @@ class SelectorWindow():
         if self.window is None:
             self.window = curses.newwin(self.nlines, self.ncols, self.posY, self.posX)
 
+        #updating directory
+        self.updateDirectory()
+
         self.window.erase()
+
         
+
         #always resize before calling the move function
         self.window.resize(self.nlines, self.ncols) 
         self.window.mvwin(new_posY, new_posX)
 
 
-        if self.selector is not None:
+        if self.items:
            self.addVisibleSelectorItems()
         elif self.nlines > 2 and self.ncols > 10:
            self.window.addstr(1,2, self.EMPTY_STRING)
         else:
            pass
 
-        #for testing
-        self.window.border('|', '|', '-','-', '-', '-', '-','-')
-        #self.window.border(' ','|',' ',' ',' ',' ',' ',' ')
         
+        self.window.border('|', '|', '-','-', '#', '#', '#','#')
         self.window.refresh()
-    
-    def addSelector(self, new_selector):
-        global selector
-
-        if isinstance(new_selector, Selector):
-            if len(new_selector.items) > 0:
-                self.selector = new_selector
-                return 1
-            self.selector = None
-            return 0
-        else:
-            self.selector = None
-            return 0
-        self.refresh()
 
     #adds the currently visible SelectorItems to the display
     def addVisibleSelectorItems(self):
+
         i = 0
-        for item in self.selector.items:
+        for item in self.items:
             
             if len(item.name) + len(item.suffix) + 6 > self.ncols :
                 #shortening the name (8 = 2 for spacing at edge, 2 for [], 3 for ... and 1 for ' ' 
-                displaystr = '[' + item.suffix + '] ' + item.name[:self.ncols - len(item.name) - len(item.suffix) - 8] + '...'
+                displaystr = '[' + item.suffix.upper() + '] ' + item.name[:self.ncols - len(item.name) - len(item.suffix) - 8] + '...'
             else :
-                displaystr = '[' + item.suffix + '] ' + item.name
+                displaystr = '[' + item.suffix.upper() + '] ' + item.name
             
             displaystr += '\n'
             
             if i >= self.minScrollPos and i <= self.maxScrollPos :
                 if item.hovered :
                     self.window.addstr(1 + i, 1, displaystr, curses.A_STANDOUT)
+                    self.window.clrtoeol()
                 else :
                     self.window.addstr(1 + i, 1, displaystr)
+                    self.window.clrtoeol()
             
             i += 1
         
@@ -156,45 +181,61 @@ class SelectorWindow():
     def refresh(self):
         self.redraw(self.nlines, self.ncols, self.posY, self.posX)
 
-class gui():
+    def readPath(self, path):
+        self.items = []
+        for item in os.listdir(path):
+            self.items.append(Item(item))
+
+    def updateDirectory(self):
+        new_items = []
+        for ositem in os.listdir(self.dirPath):
+            for item in self.items:
+                if item.fullname == ositem:
+                    new_items.append(item)
+                    added = True
+                    break
+            if not added:
+                new_items.append(Item(ositem))
+        self.items = new_items
+
+
+        
+#================================= Handling input and navigation ==================================
+
+    def currentItem(self):
+        return self.items[self.currentIndex]
     
-    def initCurses(self):
-        self.screen = curses.initscr()
-        curses.start_color()
-        curses.noecho()
-        curses.cbreak()
-        self.screen.keypad(1)
+    #selection and hovering
+    def hover(self, index):
+        self.items[index].setHovered(True)
+        #TODO: add full name in topbar
 
-        selector = Selector([Item('hello.png'), Item('whatsup.d'), Item('config.py')])
-        self.inptwin = InputWindow(curses.LINES, curses.COLS)
-        self.dirwin = SelectorWindow(curses.LINES - 3, curses.COLS - 2, 1, 1)
-        self.dirwin.addSelector(selector)
-        self.inptwin.refresh()
-        self.dirwin.refresh()
+    def dehover(self, index):
+        self.items[index].setHovered(False)
 
-    def startGui(self):
-        self.initCurses()
-        escape = False
+    def select(self, index):
+        if self.items[index].selected :
+            self.items[index].setSelected(False)
+        else :
+            self.items[index].setSelected(True)
 
 
+    #navigation
+    def up(self):
+        self.dehover(self.currentIndex)
+        self.currentIndex -= 1
+        if self.currentIndex  < 0 :
+            self.currentIndex = len(self.items) - 1
+            #TODO: adjust scrolling if necessary
+        self.hover(self.currentIndex)
+        self.refresh()
 
-        while not escape:
+    def down(self):
+        self.dehover(self.currentIndex)
+        self.currentIndex += 1
+        if self.currentIndex == len(self.items) :
+            self.currentIndex = 0
+        self.hover(self.currentIndex)
+        self.refresh()
+    
 
-
-            
-            x = self.inptwin.window.getch()
-
-            if x == ord("q"):
-                escape = True
-                curses.endwin()
-            elif x == curses.KEY_RESIZE:
-                #the order these functions get called is vital
-                self.screen.refresh()
-                maxY, maxX = self.screen.getmaxyx()
-                self.dirwin.redraw(maxY-3, maxX-2, 1, 1)
-                self.inptwin.redraw(maxY, maxX)
-            else :
-                self.inptwin.addinput(str(x))
-                self.inptwin.refresh()
-#g = gui()
-#g.startGui()
