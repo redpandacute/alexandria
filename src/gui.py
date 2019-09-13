@@ -12,12 +12,12 @@ class gui():
     originPath = None
     dirwinHandler  = None
     
-    def initCurses(self):
+    def initCurses(self, stdscr):
         global screen
         global inputwindow
         global dirwindows
 
-        self.screen = curses.initscr()
+        self.screen = stdscr
         curses.start_color()
         curses.noecho()
         curses.cbreak()
@@ -27,10 +27,10 @@ class gui():
         self.dirwinHandler = DirWinHandler('./', curses.LINES - 3, curses.COLS - 1, 1,1)
         self.setMode(GlobalMode.NAVIGATION_MODE)
 
-    def startGui(self):
+    def startGui(self, stdscr):
 
 
-        self.initCurses()
+        self.initCurses(stdscr)
         escape = False
 
         while not escape:
@@ -41,10 +41,14 @@ class gui():
             if x == ord("q"):
                 escape = True
                 curses.endwin()
+            elif x == 10: #Enter key
+                #TODO self.inptwin.execute()
+                self.inptwin.flush()
+                self.setMode(GlobalMode.NAVIGATION_MODE)
             elif x == curses.KEY_RESIZE:
                 #the order these functions get called is vital
                 self.screen.refresh()
-                maxY, maxX = self.screen.getmaxyx()
+                maxY, maxX = stdscr.getmaxyx()
                 self.dirwinHandler.redraw(maxY-3, maxX-1, 1, 1)
                 self.inptwin.redraw(maxY, maxX)
             else :
@@ -70,10 +74,13 @@ class gui():
             self.inptwin.flush()
             self.inptwin.addinput(':')
             self.inptwin.refresh()
+            self.dirwinHandler.refresh()
             curses.curs_set(1) #enabling cursor 
         
         elif mode == GlobalMode.NAVIGATION_MODE:
             self.mode = GlobalMode.NAVIGATION_MODE
+            self.inptwin.refresh()
+            self.dirwinHandler.refresh()
             curses.curs_set(0) #getting rid of the cursor
 
 class DirWinHandler():
@@ -81,7 +88,6 @@ class DirWinHandler():
     originPath = ''
     dirWindows = []
     screen = None
-    openDisplayWin = False
 
     def __init__(self, originPath, nlines, ncols, posY, posX):
         self.focused = True #provisorisch
@@ -92,6 +98,10 @@ class DirWinHandler():
         self.originPath = originPath
         self.originDirWindow = window.SelectorWindow(self.originPath, nlines, ncols, posY, posX)
         self.dirWindows.append(self.originDirWindow)
+
+        #starting in directory Mode
+        self.mode = NavMode.DIRECTORY_MODE
+        self.displayWin = None
         
         self.openWindow = self.originDirWindow
         #self.openWindow.focused = True
@@ -112,29 +122,52 @@ class DirWinHandler():
         self.posY = new_posY
         self.posX = new_posX
 
-        if self.openDisplayWin:
-            pass #implement displayWin
+        #drawing focused image with only 2 panels
+        if self.mode == NavMode.FOCUS_MODE:
+            spaceunit = self.ncols // 3 - 1
+            self.dirWindows[-1].redraw(self.nlines, spaceunit, self.posY, 0)
+
+            if self.openWindow.empty:
+                if self.displayWin:
+                    self.displayWin.window.clear()
+                return
+            if self.displayWin:
+                self.displayWin.redraw(
+                        self.openWindow.dirPath + self.openWindow.currentItem().fullname, 
+                        self.nlines, 
+                        (spaceunit + 1)* 2 + (self.ncols - 3 * (spaceunit + 1)) + 2, 
+                        self.posY,
+                        spaceunit
+                )
+            else:
+                self.displayWin = window.DisplayWindow(
+                        self.openWindow.dirPath + self.openWindow.currentItem().fullname, 
+                        self.nlines, 
+                        (spaceunit + 1) * 2 + (self.ncols - 3 * (spaceunit + 1)) + 2, #adding leftovers
+                        self.posY, 
+                        spaceunit
+                )
         else:
             spaceunit = (self.ncols) // (len(self.dirWindows) + 2) - 1#-1 gets added afterwards due to spacing
 
             i = 0
-            for window in self.dirWindows:
+            for win in self.dirWindows:
                 if i > 0:
                     posX = (spaceunit + 1) * i - i
                 else:
                     posX = (spaceunit + 1) * i
 
-                if window.focused :
-                    window.redraw(self.nlines, spaceunit * 3, self.posY, posX)
+                if win.focused :
+                    win.redraw(self.nlines, spaceunit * 3, self.posY, posX)
                     i += 2
                 else:
-                    window.redraw(self.nlines, spaceunit, self.posY, posX)
+                    win.redraw(self.nlines, spaceunit, self.posY, posX)
                 i += 1
 
             #fills up potential errors with the // operation
             self.dirWindows[-1].redraw(
                     self.dirWindows[-1].nlines,
-                    self.dirWindows[-1].ncols + (self.ncols - i * (spaceunit + 1)) + i,
+                    self.dirWindows[-1].ncols + (self.ncols - i * (spaceunit + 1)) + i + 1,
                     self.dirWindows[-1].posY,
                     self.dirWindows[-1].posX
             )
@@ -145,15 +178,37 @@ class DirWinHandler():
 
     
     def react(self, key):
+
+
+
         if self.focused:
-           
+            #modeswaps
+            if self.mode == NavMode.DIRECTORY_MODE and key == ord('f'):
+                self.mode = NavMode.FOCUS_MODE
+                self.refresh()
+            elif self.mode == NavMode.FOCUS_MODE and key == ord('f'):
+                self.mode = NavMode.DIRECTORY_MODE
+                self.refresh()
+
             #unperformable on an empty window
             if not self.openWindow.empty:
                 if key == ord('o'):
                     self.openWindow.down()
+                    if self.mode == NavMode.FOCUS_MODE:
+                        self.displayWin.setPath(
+                                self.openWindow.dirPath + 
+                                self.openWindow.currentItem().fullname
+                        )
+                        self.displayWin.refresh()
                     return
                 if key == ord(','):
                     self.openWindow.up()
+                    if self.mode == NavMode.FOCUS_MODE:
+                        self.displayWin.setPath(
+                                self.openWindow.dirPath + 
+                                self.openWindow.currentItem().fullname
+                        )
+                        self.displayWin.refresh()
                     return
                 if key == ord('e'):
                     self.open(self.openWindow.currentItem())
@@ -189,4 +244,4 @@ class DirWinHandler():
             pass
 
 g = gui()
-curses.wrapper(g.startGui())
+curses.wrapper(g.startGui)

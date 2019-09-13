@@ -5,5 +5,5 @@ class GlobalMode(Enum):
     COMMAND_MODE = 2
 
 class NavMode(Enum):
-    FOCUSED_MODE = 3
+    FOCUS_MODE = 3
     DIRECTORY_MODE = 4

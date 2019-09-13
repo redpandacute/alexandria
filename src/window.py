@@ -238,4 +238,52 @@ class SelectorWindow():
         self.hover(self.currentIndex)
         self.refresh()
     
+class DisplayWindow():
+
+    def __init__(self, path, nlines = None, ncols = None, posY = None, posX = None):
+        self.path = path
+        self.nlines = nlines
+        self.ncols = ncols
+        self.posY = posY
+        self.posX = posX
+        
+        if nlines:
+            self.window = curses.newwin(self.nlines, self.ncols, self.posY, self.posX)
+            self.refresh()
+        else :
+            self.window = None
+       
+    def redraw(self, new_path, new_nlines, new_ncols, new_posY, new_posX):
+        self.nlines = new_nlines
+        self.ncols = new_ncols
+        self.posY = new_posY
+        self.posX = new_posX
+
+        self.path = new_path
+
+        if self.window is None:
+            self.window = curses.newwin(self.nlines, self.ncols, self.posY, self.posX)
+
+        self.window.erase()
+
+        self.window.resize(self.nlines, self.ncols)
+        self.window.mvwin(self.posY, self.posX)
+
+        #TODO ADD DRAWING FUNCTION FOR IMAGES
+        self.window.addstr(1,1, self.path)
+
+        self.window.border('|', '|', '-','-', '#', '#', '#','#')
+        self.window.refresh()
+
+    def refresh(self):
+        self.redraw(self.path, self.nlines, self.ncols, self.posY, self.posX)
+
+    def erase(self):
+        self.window.erase()
+        self.window.refresh()
+
+    def setPath(self, path):
+        self.path = path
+        self.refresh()
+
 
